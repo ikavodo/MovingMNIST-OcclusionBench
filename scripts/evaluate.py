@@ -4,6 +4,8 @@ Load a trained model checkpoint and run the occlusion evaluation + plotting.
 No training is performed.
 """
 import argparse
+
+import pandas as pd
 import torch
 from models.small_cnn import SmallCNN
 from training.evaluation import evaluate_occlusion_sweep, load_best_model
@@ -43,6 +45,14 @@ def main(checkpoint_path, batch_size=64, num_workers=4):
     )
 
 
+def plot_from_csv(in_csv):
+    df = pd.read_csv(in_csv)
+    plot_occlusion_results(
+        df,
+        out_dir=OUT_DIR / "plots",
+    )
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run occlusion evaluation on a trained model.")
     parser.add_argument("checkpoint", type=str, help="Path to model checkpoint (.pt file)")
@@ -50,3 +60,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_workers", type=int, default=4, help="Number of data loader workers")
     args = parser.parse_args()
     main(args.checkpoint, args.batch_size, args.num_workers)
+
+    # # post eval plotting
+    # per_video_csv = OUT_DIR / "occlusion_eval_per_video.csv"
+    # plot_from_csv(per_video_csv)
