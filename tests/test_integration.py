@@ -8,7 +8,7 @@ from data.mnist_base import build_mnist_splits
 from data.moving_mnist import MovingMNIST
 from models.small_cnn import SmallCNN
 from training.evaluation import evaluate_occlusion_sweep
-from occluders import EvalConfig
+from occluders import EvalConfig, Occ
 from utils import get_project_root
 
 @pytest.fixture(scope="module")
@@ -43,7 +43,7 @@ def test_evaluate_sweep_smoke(small_setup, tmp_path):
     assert expected_cols.issubset(df.columns)
     # Check summary
     assert "video_acc" in summary.columns
-    # assert summary.shape[0] == len(p_values) * len(eval_cfg.occ)  # occ is all Occ
+    assert summary.shape[0] == len(p_values) * len(Occ)  # Occ is the Enum, not an attribute of EvalConfig
     # Verify CSV was written
     assert out_csv.with_name(out_csv.stem + "_per_video.csv").exists()
     assert out_csv.with_name(out_csv.stem + "_summary.csv").exists()
