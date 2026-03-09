@@ -46,9 +46,9 @@ conda activate occ
 pip install -r requirements.txt
 
 # For CUDA support (if needed), first install PyTorch with CUDA:
-# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 # Then install the rest:
-# pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 Or using pip-only (without conda):
