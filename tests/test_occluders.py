@@ -12,7 +12,7 @@ from data.moving_mnist import MovingMNIST
 from data.mnist_base import build_mnist_splits
 from utils import get_project_root
 
-TOL = 3e-2
+TOL = 2e-2
 P_VALUES = [0.1, 0.3, 0.5, 0.7, 0.9]
 
 

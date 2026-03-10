@@ -182,10 +182,10 @@ def triangular_mask_luxor_controlled_any(
 
 
 # ----------------------------------------------------------------------
-# Perlin (pure torch)
+# Perlin
 # ----------------------------------------------------------------------
 
-def perlin_field_torch(
+def perlin_field(
         H: int,
         W: int,
         *,
@@ -255,7 +255,7 @@ def perlin_field_torch(
     return total.clamp(0, 1)
 
 
-def perlin_mask_torch(
+def perlin_mask(
         H: int,
         W: int,
         *,
@@ -267,7 +267,7 @@ def perlin_mask_torch(
         lacunarity: float = 2.0,
         device: torch.device = torch.device("cpu"),
 ) -> torch.Tensor:
-    f = perlin_field_torch(
+    f = perlin_field(
         H, W,
         scale=scale,
         octaves=octaves,
@@ -284,11 +284,10 @@ def perlin_mask_torch(
 # Branches (uses OpenCV)
 # ----------------------------------------------------------------------
 
-def sample_branch_specs(H, W, *, seed=0, num_specs=400, thickness=2, movement=0,
+def sample_branch_specs(H, W, *, seed=0, num_specs=400, thickness=1, movement=0,
                         y_start_band=50, dx_range=50, dy_range=(-300, 100)):
     rng = np.random.default_rng(seed)
     y_start_band = int(np.clip(y_start_band, 1, H))
-    thickness = max(2, int(thickness))
 
     specs = []
     for _ in range(int(num_specs)):
@@ -296,7 +295,7 @@ def sample_branch_specs(H, W, *, seed=0, num_specs=400, thickness=2, movement=0,
         y1 = int(rng.integers(H - y_start_band, H))
         x2 = int(np.clip(x1 + rng.integers(-dx_range, dx_range + 1) - int(movement), 0, W - 1))
         y2 = int(np.clip(y1 + rng.integers(dy_range[0], dy_range[1] + 1), 0, H - 1))
-        thick = int(rng.integers(thickness - 1, thickness + 2))
+        thick = int(rng.integers(thickness, thickness + 2))
         specs.append(((x1, y1), (x2, y2), thick))
     return specs
 
@@ -309,41 +308,12 @@ def render_branches_mask(H, W, specs, k, *, line_type=cv2.LINE_AA):
     return mask
 
 
-def _refine_mask_to_density(mask_u8: np.ndarray, target: float, tol: float, max_steps: int = 12):
-    H, W = mask_u8.shape
-    HW = H * W
-
-    def dens(m):
-        return float(m.mean())
-
-    m = mask_u8.copy()
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-
-    for _ in range(max_steps):
-        d = dens(m)
-        if abs(d - target) <= tol:
-            break
-
-        if d > target:
-            m2 = cv2.erode(m, kernel, iterations=1)
-            if dens(m2) >= d:
-                break
-            m = m2
-        else:
-            m2 = cv2.dilate(m, kernel, iterations=1)
-            if dens(m2) <= d:
-                break
-            m = m2
-
-    return m
-
-
 def branches_mask(
         H, W, *,
         coverage=0.3,
         tol=2e-2,
         seed=0,
-        thickness=2,
+        thickness=1,
         movement=0,
         num_specs=900,
         y_start_band=25,
@@ -371,7 +341,7 @@ def branches_mask(
     )
 
     def occ_for_k(k):
-        m = render_branches_mask(H, W, specs, k, line_type=line_type)
+        m = render_branches_mask(H, W, specs, k, line_type=line_type)  # uint8 {0,1}
         return float(m.mean()), m
 
     occ_hi, m_hi = occ_for_k(num_specs)
@@ -379,6 +349,7 @@ def branches_mask(
         mask = torch.from_numpy(m_hi.astype(np.float32)).to(device)
         return mask, {"k_used": num_specs, "density": occ_hi, "note": "hit max branches"}
 
+    # Binary search for k
     lo, hi = 1, int(num_specs)
     best = None
     while lo <= hi:
@@ -395,12 +366,52 @@ def branches_mask(
 
     k_best, occ_best, m_best = best
 
-    if refine and abs(occ_best - target) > tol:
-        m_best = _refine_mask_to_density(m_best.astype(np.uint8), target, tol, max_steps=10)
+    # ---- Local search around k_best (cheap fine-tuning) ----
+    candidates = [k_best]
+    if k_best > 1:
+        candidates.append(k_best - 1)
+    if k_best < num_specs:
+        candidates.append(k_best + 1)
+
+    best_err = abs(occ_best - target)
+    for k_cand in candidates:
+        if k_cand == k_best:
+            continue
+        occ_cand, m_cand = occ_for_k(k_cand)
+        err = abs(occ_cand - target)
+        if err < best_err:
+            best_err = err
+            k_best, occ_best, m_best = k_cand, occ_cand, m_cand
+            if best_err <= tol:
+                break
+
+    # ---- Limited refinement if still needed ----
+    if refine and best_err > tol:
+        # Quick refinement (max 5 steps) – early stop as soon as tolerance is met
+        m_best = _refine_mask_to_density(m_best.astype(np.uint8), target, tol, max_steps=5)
         occ_best = float(m_best.mean())
 
     mask = torch.from_numpy(m_best.astype(np.float32)).to(device)
     return mask, {"k_used": int(k_best), "density": float(occ_best)}
+
+
+def _refine_mask_to_density(mask_u8: np.ndarray, target: float, tol: float, max_steps: int = 5):
+    """Quick refinement – stops as soon as tolerance is met or no change."""
+    m = mask_u8.copy()
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+
+    for _ in range(max_steps):
+        d = m.mean()
+        if abs(d - target) <= tol:
+            break
+        if d > target:
+            m_new = cv2.erode(m, kernel, iterations=1)
+        else:
+            m_new = cv2.dilate(m, kernel, iterations=1)
+        if np.array_equal(m, m_new):
+            break
+        m = m_new
+    return m
 
 
 # ----------------------------------------------------------------------
@@ -497,7 +508,7 @@ def build_mask_within_bounds(video, occ, p, *, seed=7, device=None, tol=2e-2):
         if occ == Occ.BERNOULLI:
             local = (torch.rand((hb, wb), device=device) < float(p)).float()
         elif occ == Occ.PERLIN:
-            local = perlin_mask_torch(
+            local = perlin_mask(
                 hb, wb,
                 coverage=float(p),
                 seed=s,
@@ -527,7 +538,7 @@ def build_mask_within_bounds(video, occ, p, *, seed=7, device=None, tol=2e-2):
                 coverage=float(p),
                 tol=2e-2,
                 seed=s,
-                thickness=2,
+                thickness=1,
                 movement=0,
                 num_specs=900,
                 y_start_band=min(25, hb),

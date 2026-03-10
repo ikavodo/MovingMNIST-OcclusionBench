@@ -100,4 +100,6 @@ pytest tests/ -v
 - **PERLIN**: Perlin noise thresholded.
 - **BRANCHES**: Random tree‑like line segments.
 
-All masks are clipped to the digit's motion bounds and tuned to achieve the target coverage within a 2% tolerance.
+All masks are tuned to achieve the target coverage within a 2% tolerance.
+See [notebook](https://github.com/ikavodo/MovingMNIST-OcclusionBench/tree/master/notebooks/occ_moving_mnist.ipynb) 
+for examples of masks and occluded videos. 

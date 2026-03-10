@@ -34,7 +34,6 @@ MANIFEST
 
 # PyTorch / Jupyter
 *.ipynb_checkpoints/
-*.ipynb
 *.pt
 *.pth
 *.onnx
