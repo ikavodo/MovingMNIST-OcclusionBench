@@ -1,3 +1,5 @@
+import sys
+
 import torch
 import torch.nn.functional as F
 import pandas as pd
@@ -80,7 +82,7 @@ def evaluate_occlusion_sweep(
 
     use_autocast = (device.type == "cuda")
 
-    pbar = tqdm(total=total_steps, desc="occlusion eval", unit="combo")
+    pbar = tqdm(total=total_steps, desc="occlusion eval", unit="combo", disable=not sys.stdout.isatty())
 
     for batch_idx, (videos, labels, _, metas) in enumerate(loader):
         videos = videos.to(device, non_blocking=True)
