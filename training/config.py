@@ -18,3 +18,10 @@ class TrainConfig:
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     log_dir: Path = LOG_DIR
     ckpt_path: Path = CKPT_DIR / "best_smallcnn.pt"
+
+
+@dataclass
+class EvalConfig:
+    k_frames: int = 5
+    n_mask_seeds: int = 3
+    static_masks: bool = True

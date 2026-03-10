@@ -7,9 +7,10 @@ from pathlib import Path
 from torch.utils.data import DataLoader
 
 from occluders import (
-    Occ, EvalConfig, apply_mask_to_video, mask_component_stats
+    Occ, apply_mask_to_video, mask_component_stats
 )
 from loss.metrics import semantic_feature_loss
+from training.config import EvalConfig
 
 
 @torch.no_grad()
@@ -53,6 +54,9 @@ def evaluate_occlusion_sweep(
 ):
     if device is None:
         device = next(model.parameters()).device
+    else:
+        device = torch.device(device)
+
     model.eval()
     model = model.to(device)
 
@@ -69,64 +73,61 @@ def evaluate_occlusion_sweep(
     rows = []
     k = eval_cfg.k_frames
     n_mask_seeds = eval_cfg.n_mask_seeds
+    n_occ = len(Occ)
+    n_p = len(p_values)
+    n_batches = len(loader)
+    total_steps = n_batches * n_p * n_occ * n_mask_seeds
 
-    # Precompute motion bounds for all videos to avoid recomputation
-    # We can compute on the fly inside build_mask_within_bounds, but it's cheap.
-    # However, we'll keep as is for simplicity; bounds are computed per batch anyway.
+    use_autocast = (device.type == "cuda")
 
-    for batch_idx, (videos, labels, _, metas) in enumerate(tqdm(loader, desc="occlusion sweep")):
-        videos = videos.to(device, non_blocking=True)  # [B, T, 1, H, W]
-        labels = labels.to(device, non_blocking=True)  # [B]
+    pbar = tqdm(total=total_steps, desc="occlusion eval", unit="combo")
 
-        # Select k frames per video
-        # take_frames expects single video; we'll implement a batched version
-        videos_k, frame_indices = take_frames_batched(videos, k)  # [B, k, 1, H, W]
+    for batch_idx, (videos, labels, _, metas) in enumerate(loader):
+        videos = videos.to(device, non_blocking=True)
+        labels = labels.to(device, non_blocking=True)
+
+        videos_k, frame_indices = take_frames_batched(videos, k)
 
         for p in p_values:
             p_float = float(p)
+
             for occ in Occ:
                 for mask_seed in range(n_mask_seeds):
-                    # Seed that varies per video (ensured by build_mask_within_bounds)
-                    # We pass a base seed that will be offset per video inside the function.
-                    # build_mask_within_bounds already does: s = int(seed) + 1000 * b
-                    # So we need a seed that is different for each batch and mask_seed.
-                    base_seed = (10_000 * (batch_idx * batch_size) +
-                                 100 * mask_seed + 7)
+                    base_seed = (
+                            10_000 * (batch_idx * batch_size) +
+                            100 * mask_seed + 7
+                    )
 
-                    # Apply occlusion to the batch of videos
                     masked, mask = apply_mask_to_video(
                         videos_k, occ, p_float,
                         seed=base_seed, device=device
-                    )  # masked: [B, k, 1, H, W]; mask: same shape
+                    )
 
-                    # Flatten for model forward
                     B, k, C, H, W = masked.shape
-                    flat = masked.view(B * k, C, H, W)  # [B*k, C, H, W]
+                    flat = masked.view(B * k, C, H, W)
 
-                    # Mixed precision forward
-                    with torch.autocast(device_type="cuda"):
-                        logits_flat = model(flat)  # [B*k, 10]
-                    logits = logits_flat.view(B, k, 10)  # [B, k, 10]
+                    with torch.autocast(device_type="cuda", enabled=use_autocast):
+                        logits_flat = model(flat)
 
-                    # For each video in batch, compute metrics
+                    logits = logits_flat.view(B, k, 10)
+
                     for b in range(B):
-                        video_logits = logits[b]  # [k, 10]
+                        video_logits = logits[b]
                         label = labels[b]
-                        meta = {k: v[b] if isinstance(v, torch.Tensor) else v[b]
-                                for k, v in metas.items()}  # careful with metas structure
+                        meta = {
+                            key: value[b] if isinstance(value, torch.Tensor) else value[b]
+                            for key, value in metas.items()
+                        }
 
                         m = video_metrics_from_logits(video_logits, label)
 
-                        # Compute semantic feature loss (optional, could be batched too)
-                        # For simplicity, we loop over videos; can be optimized later.
                         feat_loss = semantic_feature_loss(
                             model, videos_k[b], masked[b],
                             layers=("conv1", "conv2", "conv3"),
                             metric="cosine",
                         )
 
-                        # Mask stats
-                        mask2d = mask[b, 0, 0]  # [H, W]
+                        mask2d = mask[b, 0, 0]
                         struct = mask_component_stats(mask2d)
 
                         rows.append({
@@ -143,6 +144,17 @@ def evaluate_occlusion_sweep(
                             **struct,
                             **m,
                         })
+
+                    pbar.update(1)
+                    pbar.set_postfix(
+                        batch=f"{batch_idx + 1}/{n_batches}",
+                        occ=occ.name.lower(),
+                        p=f"{p_float:.1f}",
+                        seed=mask_seed,
+                        rows=len(rows),
+                    )
+
+    pbar.close()
 
     # Create DataFrame and summaries (same as before)
     df = pd.DataFrame(rows)

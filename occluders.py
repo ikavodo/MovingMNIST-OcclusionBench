@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from enum import Enum, auto
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict
 
 
 # ----------------------------------------------------------------------
@@ -26,13 +26,6 @@ class MaskConfig:
     coverage: float
     seed: int
     static: bool = True
-
-
-@dataclass
-class EvalConfig:
-    k_frames: int = 5
-    n_mask_seeds: int = 3
-    static_masks: bool = True
 
 
 # ----------------------------------------------------------------------

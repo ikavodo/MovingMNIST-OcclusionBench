@@ -4,26 +4,22 @@ from torch.utils.data import DataLoader, Subset
 import argparse
 from data import build_mnist_splits, MovingMNIST, MovingMNISTFrames
 from models.small_cnn import SmallCNN
-from training.config import TrainConfig
+from training.config import TrainConfig, EvalConfig
 from training.trainer import train_with_early_stopping
 from training.evaluation import evaluate_occlusion_sweep, load_best_model
-from occluders import EvalConfig
 from utils import seed_everything, get_project_root, plot_occlusion_results
 
 OUT_DIR = get_project_root() / "outputs"
 
 
-def build_loaders(seed: int = 0, batch_size: int = 256, num_workers: int = 2, data_dir=None):
+def build_loaders(seed=0, batch_size=256, num_workers=2, test_subset_size=64, data_dir=None):
     if data_dir is None:
         data_dir = get_project_root() / "data"
     train_base, val_base, test_base = build_mnist_splits(data_dir)
     train_moving = MovingMNIST(train_base, T=20, canvas=64, seed=1000 + seed)
     val_moving = MovingMNIST(val_base, T=20, canvas=64, seed=2000 + seed)
     test_moving = MovingMNIST(test_base, T=20, canvas=64, seed=3000 + seed)
-
-    # Use only a single batch of test videos to keep evaluation manageable
-    test_subset = Subset(test_moving, range(min(batch_size, len(test_moving))))
-
+    test_subset = Subset(test_moving, range(min(test_subset_size, len(test_moving))))
     train_frames = MovingMNISTFrames(train_moving, frame_seed=10_000 + seed)
     val_frames = MovingMNISTFrames(val_moving, frame_seed=20_000 + seed)
 

@@ -2,14 +2,17 @@ import pytest
 from torch.utils.data import Subset
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from data.mnist_base import build_mnist_splits
 from data.moving_mnist import MovingMNIST
 from models.small_cnn import SmallCNN
 from training.evaluation import evaluate_occlusion_sweep
-from occluders import EvalConfig, Occ
+from occluders import Occ
 from utils import get_project_root
+from training.config import EvalConfig
+
 
 @pytest.fixture(scope="module")
 def small_setup():
@@ -21,6 +24,7 @@ def small_setup():
     # Create a quick untrained model
     model = SmallCNN()
     return model, moving_test
+
 
 def test_evaluate_sweep_smoke(small_setup, tmp_path):
     model, moving_test = small_setup
