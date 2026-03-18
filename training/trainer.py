@@ -5,7 +5,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 import torch
 import torch.nn.functional as F
-from torch.optim import Adam
+from torch.optim import Adam, AdamW
 from torch.utils.tensorboard import SummaryWriter
 from .config import TrainConfig
 
@@ -33,7 +33,7 @@ def evaluate_classifier(model, loader, device: str):
 def train_with_early_stopping(model, train_loader, val_loader, cfg: TrainConfig):
     device = cfg.device
     model.to(device)
-    opt = Adam(model.parameters(), lr=cfg.lr)
+    opt = AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     writer = SummaryWriter(cfg.log_dir) if cfg.log_dir else None
 
     best_val_loss = float("inf")

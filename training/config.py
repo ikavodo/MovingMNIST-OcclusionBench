@@ -12,6 +12,7 @@ CKPT_DIR = LOG_DIR / "checkpoints"
 class TrainConfig:
     batch_size: int = 256
     lr: float = 1e-3
+    weight_decay: float = 1e-4
     max_epochs: int = 30
     patience: int = 5
     num_workers: int = 2

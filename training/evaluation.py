@@ -214,7 +214,7 @@ def load_best_model(model_class, checkpoint_path, device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model_class().to(device)
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     if isinstance(checkpoint, dict) and 'model_state' in checkpoint:
         state_dict = checkpoint['model_state']
     else:

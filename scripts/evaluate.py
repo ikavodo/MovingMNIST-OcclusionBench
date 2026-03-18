@@ -9,11 +9,12 @@ from pathlib import Path
 import pandas as pd
 import torch
 
+from data.mnist_base import DatasetType
 from models.small_cnn import SmallCNN
 from training.config import EvalConfig
 from training.evaluation import evaluate_occlusion_sweep, load_best_model
 from utils import seed_everything, get_project_root, plot_occlusion_results
-from train import build_loaders  # reuse data loader builder
+from train import build_loaders, parse_dataset  # reuse data loader builder
 
 OUT_DIR = get_project_root() / "outputs"
 
@@ -23,9 +24,18 @@ DEFAULT_EVAL_BATCH_SIZE = 16
 DEFAULT_NUM_WORKERS = 4
 
 
+def plot_from_csv(in_csv):
+    df = pd.read_csv(in_csv)
+    plot_occlusion_results(
+        df,
+        out_dir=OUT_DIR / "plots",
+    )
+
+
 def main(
         checkpoint_path,
         subset_size=128,
+        dataset=DatasetType.MNIST,
 ):
     seed_everything(42)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -44,6 +54,7 @@ def main(
     print(f"Internal loader batch size: {DEFAULT_LOADER_BATCH_SIZE}")
     print(f"Internal eval batch size: {DEFAULT_EVAL_BATCH_SIZE}")
     print(f"Num workers: {DEFAULT_NUM_WORKERS}")
+    print(f"Dataset type: {dataset}")
 
     # Build test dataset only
     _, _, test_moving = build_loaders(
@@ -52,6 +63,7 @@ def main(
         num_workers=DEFAULT_NUM_WORKERS,
         test_subset_size=subset_size,
         data_dir=repo_root / "data",
+        dataset=dataset,
     )
 
     model = load_best_model(SmallCNN, checkpoint_path, device=device)
@@ -74,14 +86,6 @@ def main(
     )
 
 
-def plot_from_csv(in_csv):
-    df = pd.read_csv(in_csv)
-    plot_occlusion_results(
-        df,
-        out_dir=OUT_DIR / "plots",
-    )
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Run occlusion evaluation on a trained model."
@@ -97,9 +101,17 @@ if __name__ == "__main__":
         default=64,
         help="Number of test videos to evaluate.",
     )
+    parser.add_argument(
+        "--dataset",
+        type=parse_dataset,
+        default=DatasetType.MNIST,
+        help="MNIST variant: <fashion|mnist>.",
+    )
     args = parser.parse_args()
 
     main(
         checkpoint_path=args.checkpoint,
         subset_size=args.subset_size,
+        dataset=args.dataset,
     )
+

@@ -22,10 +22,10 @@ def semantic_feature_loss(model, video_clean, video_occ, device=None, layers=("c
     model.eval()
 
     name_to_module = {
-        "conv1": model.net[0],
-        "conv2": model.net[3],
-        "conv3": model.net[6],
-        "pool": model.net[8],
+        "conv1": model.features[0],
+        "conv2": model.features[4],
+        "conv3": model.features[8],
+        "pool": model.features[11],
     }
 
     hooks = {name: FeatureHook(name_to_module[name]) for name in layers}
