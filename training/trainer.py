@@ -5,7 +5,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 import torch
 import torch.nn.functional as F
-from torch.optim import Adam, AdamW
+from torch.optim import AdamW
 from torch.utils.tensorboard import SummaryWriter
 from .config import TrainConfig
 
@@ -34,6 +34,9 @@ def train_with_early_stopping(model, train_loader, val_loader, cfg: TrainConfig)
     device = cfg.device
     model.to(device)
     opt = AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        opt, mode="min", factor=0.5, patience=cfg.scheduler_patience
+    )
     writer = SummaryWriter(cfg.log_dir) if cfg.log_dir else None
 
     best_val_loss = float("inf")
@@ -60,9 +63,10 @@ def train_with_early_stopping(model, train_loader, val_loader, cfg: TrainConfig)
             correct += (logits.argmax(1) == y).sum().item()
             total += x.size(0)
             pbar.set_postfix(loss=f"{loss_sum / max(total, 1):.4f}", acc=f"{correct / max(total, 1):.3f}")
-
         train_metrics = {"loss": loss_sum / max(total, 1), "acc": correct / max(total, 1)}
         val_metrics = evaluate_classifier(model, val_loader, device)
+        scheduler.step(val_metrics['loss'])
+
         history.append({"epoch": epoch, **{f"train_{k}": v for k, v in train_metrics.items()},
                         **{f"val_{k}": v for k, v in val_metrics.items()}})
 
@@ -71,6 +75,7 @@ def train_with_early_stopping(model, train_loader, val_loader, cfg: TrainConfig)
             writer.add_scalar("train/acc", train_metrics["acc"], epoch)
             writer.add_scalar("val/loss", val_metrics["loss"], epoch)
             writer.add_scalar("val/acc", val_metrics["acc"], epoch)
+            writer.add_scalar("train/lr", opt.param_groups[0]["lr"], epoch)
 
         improved = val_metrics["loss"] < best_val_loss - 1e-4
         if improved:
@@ -86,7 +91,7 @@ def train_with_early_stopping(model, train_loader, val_loader, cfg: TrainConfig)
             f"| val loss {val_metrics['loss']:.4f} acc {val_metrics['acc']:.3f}"
         )
 
-        if bad_epochs >= cfg.patience:
+        if bad_epochs >= cfg.early_stop_patience:
             print(f"Early stopping triggered after {epoch} epochs.")
             break
 

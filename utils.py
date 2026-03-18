@@ -148,7 +148,7 @@ def plot_semantic_vs_accuracy(df, out_dir, occ_col="occ"):
     plt.close(fig)
 
 
-# utils.py (or plotting.py) — add these functions
+# common.py (or plotting.py) — add these functions
 
 def plot_coverage_summary(df, out_dir, occ_col="occ", coverage_col="coverage_target"):
     """Main coverage curves for key metrics."""

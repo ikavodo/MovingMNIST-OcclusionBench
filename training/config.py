@@ -13,8 +13,9 @@ class TrainConfig:
     batch_size: int = 256
     lr: float = 1e-3
     weight_decay: float = 1e-4
-    max_epochs: int = 30
-    patience: int = 5
+    max_epochs: int = 40
+    scheduler_patience: int = 2
+    early_stop_patience: int = 6
     num_workers: int = 2
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     log_dir: Path = LOG_DIR

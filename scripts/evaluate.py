@@ -1,42 +1,55 @@
 #!/usr/bin/env python
-"""
-Load a trained model checkpoint and run the occlusion evaluation + plotting.
-No training is performed.
-"""
 import argparse
 from pathlib import Path
 
-import pandas as pd
 import torch
 
 from data.mnist_base import DatasetType
 from models.small_cnn import SmallCNN
 from training.config import EvalConfig
-from training.evaluation import evaluate_occlusion_sweep, load_best_model
+from training.evaluation import load_best_model, evaluate_occlusion_sweep
 from utils import seed_everything, get_project_root, plot_occlusion_results
-from train import build_loaders, parse_dataset  # reuse data loader builder
 
-OUT_DIR = get_project_root() / "outputs"
+from data.loaders import (
+    OUT_DIR,
+    DEFAULT_LOADER_BATCH_SIZE,
+    DEFAULT_EVAL_BATCH_SIZE,
+    DEFAULT_NUM_WORKERS,
+    parse_dataset,
+    build_test_dataset,
+)
 
-# Internal defaults chosen for a 16 GB GPU / reasonable CPU usage
-DEFAULT_LOADER_BATCH_SIZE = 64
-DEFAULT_EVAL_BATCH_SIZE = 16
-DEFAULT_NUM_WORKERS = 4
 
+def run_occlusion_eval(
+        model,
+        test_moving,
+        out_dir=OUT_DIR,
+        device=None,
+        eval_batch_size=DEFAULT_EVAL_BATCH_SIZE,
+        num_workers=DEFAULT_NUM_WORKERS,
+):
+    p_values = torch.linspace(0.1, 0.9, 9)
 
-def plot_from_csv(in_csv):
-    df = pd.read_csv(in_csv)
-    plot_occlusion_results(
-        df,
-        out_dir=OUT_DIR / "plots",
+    df, summary = evaluate_occlusion_sweep(
+        model,
+        test_moving,
+        p_values=p_values,
+        out_csv=out_dir / "occlusion_eval.csv",
+        eval_cfg=EvalConfig(k_frames=5, n_mask_seeds=3, static_masks=True),
+        device=device,
+        batch_size=eval_batch_size,
+        num_workers=num_workers,
     )
 
+    plot_occlusion_results(
+        df,
+        out_dir=out_dir / "plots",
+    )
 
-def main(
-        checkpoint_path,
-        subset_size=128,
-        dataset=DatasetType.MNIST,
-):
+    return df, summary
+
+
+def main(checkpoint_path, subset_size=128, dataset=DatasetType.MNIST):
     seed_everything(42)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -54,35 +67,25 @@ def main(
     print(f"Internal loader batch size: {DEFAULT_LOADER_BATCH_SIZE}")
     print(f"Internal eval batch size: {DEFAULT_EVAL_BATCH_SIZE}")
     print(f"Num workers: {DEFAULT_NUM_WORKERS}")
-    print(f"Dataset type: {dataset}")
+    print(f"Dataset type: {dataset.value}")
 
-    # Build test dataset only
-    _, _, test_moving = build_loaders(
+    test_moving = build_test_dataset(
         seed=42,
-        batch_size=DEFAULT_LOADER_BATCH_SIZE,
+        subset_size=subset_size,
         num_workers=DEFAULT_NUM_WORKERS,
-        test_subset_size=subset_size,
         data_dir=repo_root / "data",
         dataset=dataset,
     )
 
     model = load_best_model(SmallCNN, checkpoint_path, device=device)
 
-    p_values = torch.linspace(0.1, 0.9, 9)
-    df, summary = evaluate_occlusion_sweep(
+    run_occlusion_eval(
         model,
         test_moving,
-        p_values=p_values,
-        out_csv=OUT_DIR / "occlusion_eval.csv",
-        eval_cfg=EvalConfig(k_frames=5, n_mask_seeds=3, static_masks=True),
+        out_dir=OUT_DIR,
         device=device,
-        batch_size=DEFAULT_EVAL_BATCH_SIZE,
+        eval_batch_size=DEFAULT_EVAL_BATCH_SIZE,
         num_workers=DEFAULT_NUM_WORKERS,
-    )
-
-    plot_occlusion_results(
-        df,
-        out_dir=OUT_DIR / "plots",
     )
 
 
@@ -98,7 +101,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--subset-size",
         type=int,
-        default=64,
+        default=128,
         help="Number of test videos to evaluate.",
     )
     parser.add_argument(
@@ -114,4 +117,3 @@ if __name__ == "__main__":
         subset_size=args.subset_size,
         dataset=args.dataset,
     )
-
