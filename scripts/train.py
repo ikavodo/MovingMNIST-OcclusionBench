@@ -3,20 +3,19 @@ import argparse
 
 from data.mnist_base import DatasetType
 from models.small_cnn import SmallCNN
-from training.config import TrainConfig
+from training.config import TrainConfig, LOG_DIR
 from training.trainer import train_with_early_stopping
 from utils import seed_everything, get_project_root
-
-from data.loaders import OUT_DIR, parse_dataset, build_loaders
+from data.loaders import parse_dataset, build_loaders
 
 
 def main(dataset=DatasetType.MNIST):
-    os.makedirs(OUT_DIR, exist_ok=True)
+    os.makedirs(LOG_DIR, exist_ok=True)
     seed_everything(42)
 
     train_cfg = TrainConfig()
-    print(f"Dataset type: {dataset.value}")
-    ckpt_path = train_cfg.ckpt_dir / f"{dataset.value}.pt"
+    print(f"Dataset type: {dataset}")
+    ckpt_path = train_cfg.ckpt_dir / f"{dataset}.pt"
 
     train_loader, val_loader, test_moving = build_loaders(
         seed=42,
@@ -34,7 +33,7 @@ def main(dataset=DatasetType.MNIST):
         train_cfg,
         ckpt_path
     )
-    history.to_csv(OUT_DIR / "train_history.csv", index=False)
+    history.to_csv(LOG_DIR / "train_history.csv", index=False)
 
 
 if __name__ == "__main__":
@@ -45,7 +44,7 @@ if __name__ == "__main__":
         "--dataset",
         type=parse_dataset,
         default=DatasetType.MNIST,
-        help="Dataset variant: <fashion|mnist>.",
+        help="Dataset variant: <fashion|mnist_old (cleaner)>.",
     )
     args = parser.parse_args()
     main(dataset=args.dataset)

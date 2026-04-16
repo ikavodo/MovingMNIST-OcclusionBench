@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import os
 from pathlib import Path
 
 import torch
@@ -80,11 +81,13 @@ def main(checkpoint_path, subset_size=128, dataset=DatasetType.MNIST, progress_b
     )
 
     model = load_best_model(SmallCNN, checkpoint_path, device=device)
+    out_dir_dataset = OUT_DIR / dataset
+    os.makedirs(out_dir_dataset, exist_ok=True)
 
     run_occlusion_eval(
         model,
         test_moving,
-        out_dir=OUT_DIR,
+        out_dir=out_dir_dataset,
         device=device,
         eval_batch_size=DEFAULT_EVAL_BATCH_SIZE,
         num_workers=DEFAULT_NUM_WORKERS,
@@ -97,9 +100,9 @@ if __name__ == "__main__":
         description="Run occlusion evaluation on a trained model."
     )
     parser.add_argument(
-        "checkpoint",
+        "checkpoint_dir",
         type=str,
-        help="Path to model checkpoint (.pt file), absolute or relative to repo root.",
+        help="Path to model checkpoint directory, absolute or relative to repo root.",
     )
     parser.add_argument(
         "--subset-size",
@@ -111,12 +114,13 @@ if __name__ == "__main__":
         "--dataset",
         type=parse_dataset,
         default=DatasetType.MNIST,
-        help="MNIST variant: <fashion|mnist>.",
+        help="MNIST variant: <fashion|mnist_old (cleaner)>.",
     )
     args = parser.parse_args()
-
+    # find relevant checkpoint for dataset
+    checkpoint_path = Path(args.checkpoint_dir) / f"{args.dataset}.pt"
     main(
-        checkpoint_path=args.checkpoint,
+        checkpoint_path=checkpoint_path,
         subset_size=args.subset_size,
         dataset=args.dataset,
     )

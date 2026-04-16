@@ -4,7 +4,7 @@ import torch
 from utils import get_project_root
 
 ROOT = get_project_root()
-LOG_DIR = ROOT / "runs" / "moving_mnist"
+LOG_DIR = ROOT / "runs"
 CKPT_DIR = LOG_DIR / "checkpoints"
 
 

@@ -1,5 +1,3 @@
-import sys
-
 import torch
 import torch.nn.functional as F
 import pandas as pd
@@ -16,19 +14,28 @@ from training.config import EvalConfig
 
 
 @torch.no_grad()
-def video_metrics_from_logits(logits, y, eps=1e-8):
+def video_metrics_from_logits(logits, y):
+    logits = logits.float()  # critical fix
+
     probs = F.softmax(logits, dim=1)
     pred = probs.argmax(1)
     conf = probs.max(1).values
     y = y.long()
-    p_true = probs[:, y]
+    p_true = probs[:, y.item()]
+
     avg_logp = F.log_softmax(logits, dim=1).mean(dim=0)
-    video_probs = torch.softmax(avg_logp, dim=0)
+    video_log_probs = F.log_softmax(avg_logp, dim=0)
+    video_probs = video_log_probs.exp()
+
     video_pred = int(video_probs.argmax().item())
     video_true = float(video_probs[y].item())
     video_conf = float(video_probs.max().item())
-    nll = float(-torch.log(video_probs[y] + eps).item())
-    brier = float(torch.sum((video_probs - F.one_hot(y, num_classes=10).float()) ** 2).item())
+    nll = float((-video_log_probs[y]).item())
+
+    brier = float(torch.sum(
+        (video_probs - F.one_hot(y, num_classes=logits.shape[1]).float()) ** 2
+    ).item())
+
     return {
         "frame_acc": float((pred == y).float().mean().item()),
         "frame_conf_mean": float(conf.mean().item()),
@@ -53,7 +60,7 @@ def evaluate_occlusion_sweep(
         eval_cfg: EvalConfig = EvalConfig(),
         batch_size: int = 64,
         num_workers: int = 4,
-        progress_bar = True
+        progress_bar=True
 ):
     if device is None:
         device = next(model.parameters()).device
@@ -82,7 +89,7 @@ def evaluate_occlusion_sweep(
     total_steps = n_batches * n_p * n_occ * n_mask_seeds
 
     use_autocast = (device.type == "cuda")
-    pbar = tqdm(total=total_steps, desc="occlusion eval", unit="combo", disable= not progress_bar)
+    pbar = tqdm(total=total_steps, desc="occlusion eval", unit="combo", disable=not progress_bar)
 
     for batch_idx, (videos, labels, _, metas) in enumerate(loader):
         videos = videos.to(device, non_blocking=True)
