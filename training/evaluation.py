@@ -53,6 +53,7 @@ def evaluate_occlusion_sweep(
         eval_cfg: EvalConfig = EvalConfig(),
         batch_size: int = 64,
         num_workers: int = 4,
+        progress_bar = True
 ):
     if device is None:
         device = next(model.parameters()).device
@@ -81,8 +82,7 @@ def evaluate_occlusion_sweep(
     total_steps = n_batches * n_p * n_occ * n_mask_seeds
 
     use_autocast = (device.type == "cuda")
-
-    pbar = tqdm(total=total_steps, desc="occlusion eval", unit="combo", disable=not sys.stdout.isatty())
+    pbar = tqdm(total=total_steps, desc="occlusion eval", unit="combo", disable= not progress_bar)
 
     for batch_idx, (videos, labels, _, metas) in enumerate(loader):
         videos = videos.to(device, non_blocking=True)

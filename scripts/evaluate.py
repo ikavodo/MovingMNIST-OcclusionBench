@@ -27,6 +27,7 @@ def run_occlusion_eval(
         device=None,
         eval_batch_size=DEFAULT_EVAL_BATCH_SIZE,
         num_workers=DEFAULT_NUM_WORKERS,
+        progress_bar = True
 ):
     p_values = torch.linspace(0.1, 0.9, 9)
 
@@ -39,6 +40,7 @@ def run_occlusion_eval(
         device=device,
         batch_size=eval_batch_size,
         num_workers=num_workers,
+        progress_bar = progress_bar
     )
 
     plot_occlusion_results(
@@ -49,7 +51,7 @@ def run_occlusion_eval(
     return df, summary
 
 
-def main(checkpoint_path, subset_size=128, dataset=DatasetType.MNIST):
+def main(checkpoint_path, subset_size=128, dataset=DatasetType.MNIST, progress_bar=True):
     seed_everything(42)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -86,6 +88,7 @@ def main(checkpoint_path, subset_size=128, dataset=DatasetType.MNIST):
         device=device,
         eval_batch_size=DEFAULT_EVAL_BATCH_SIZE,
         num_workers=DEFAULT_NUM_WORKERS,
+        progress_bar=progress_bar
     )
 
 

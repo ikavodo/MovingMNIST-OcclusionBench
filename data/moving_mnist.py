@@ -82,7 +82,7 @@ class MovingMNIST(Dataset):
             x, y = nx, ny
             video.append(frame.clone())
 
-        meta = {"base_idx": int(idx), "seed": int(self.seed + idx), "vxy": (vx, vy)} # use vx, vy for reconstruction
+        meta = {"base_idx": int(idx), "seed": int(self.seed + idx), "vx": vx, "vy": vy} # use vx, vy for reconstruction
         return torch.stack(video, dim=0), int(label), torch.tensor(shifts, dtype=torch.long), meta
 
 
