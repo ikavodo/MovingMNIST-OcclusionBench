@@ -27,6 +27,40 @@ class MovingMNIST(Dataset):
         return len(self.base)
 
     @staticmethod
+    def align_video(video: torch.Tensor, shifts: torch.Tensor):
+        """
+        Align all frames to frame 0.
+
+        video: [T, C, H, W]
+        shifts: [T-1, 2] (dy, dx)
+        """
+        T, C, H, W = video.shape
+        assert shifts.shape[0] == T - 1
+
+        aligned = [video[0]]
+
+        cum_dy = 0
+        cum_dx = 0
+
+        for t in range(1, T):
+            dy, dx = shifts[t - 1]
+            cum_dy += dy.item()
+            cum_dx += dx.item()
+
+            frame = video[t]
+            aligned_frame = torch.roll(
+                frame, shifts=(-cum_dy, -cum_dx), dims=(1, 2)
+            )
+
+            aligned_frame = MovingMNIST._zero_wrap(
+                aligned_frame.clone(), -cum_dy, -cum_dx
+            )
+
+            aligned.append(aligned_frame)
+
+        return torch.stack(aligned, dim=0)
+
+    @staticmethod
     def _bounce(pos, v, lo, hi):
         nxt = pos + v
         if nxt < lo:
@@ -82,7 +116,13 @@ class MovingMNIST(Dataset):
             x, y = nx, ny
             video.append(frame.clone())
 
-        meta = {"base_idx": int(idx), "seed": int(self.seed + idx), "vx": vx, "vy": vy} # use vx, vy for reconstruction
+        meta = {
+            "base_idx": int(idx),
+            "seed": int(self.seed + idx),
+            "vx": vx,
+            "vy": vy,
+            "shifts": shifts
+        }
         return torch.stack(video, dim=0), int(label), torch.tensor(shifts, dtype=torch.long), meta
 
 
