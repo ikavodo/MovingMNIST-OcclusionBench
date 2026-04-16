@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from occluders import (
-    Occ, apply_mask_to_video, build_mask_within_bounds, compute_motion_bounds
+    Occ, apply_mask_to_video, build_mask, compute_motion_bounds
 )
 from data.moving_mnist import MovingMNIST
 from data.mnist_base import build_mnist_splits
@@ -75,7 +75,7 @@ def test_build_mask_within_bounds_no_motion():
     h0, h1, w0, w1 = bounds[0].tolist()
     assert h0 < h1 and w0 < w1
     # Build mask within bounds
-    mask2d = build_mask_within_bounds(video, Occ.BERNOULLI, 0.3, seed=7)
+    mask2d = build_mask(video, Occ.BERNOULLI, 0.3, seed=7)
     # Check that mask is only inside bounds (outside should be zero)
     outside_top = mask2d[0, :h0, :].sum()
     outside_bottom = mask2d[0, h1 + 1:, :].sum()

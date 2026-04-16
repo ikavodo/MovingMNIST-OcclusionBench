@@ -20,11 +20,11 @@ def test_smallcnn_forward():
 def test_feature_hook():
     model = SmallCNN()
     # Attach hook to first conv layer
-    hook = FeatureHook(model.net[0])
+    hook = FeatureHook(model.features[0])
     x = torch.randn(2, 1, 64, 64)
     _ = model(x)
     assert hook.out is not None
-    assert hook.out.shape[1] == 16  # first conv has 16 channels
+    assert hook.out.shape[1] == 32  # first conv has 16 channels
     hook.close()
 
 def test_semantic_feature_loss():

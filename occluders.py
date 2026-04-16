@@ -473,7 +473,7 @@ def apply_structured_occlusion_static(video, mask2d):
     raise ValueError("video must be [T,1,H,W] or [B,T,1,H,W]")
 
 
-def build_mask_within_bounds(video, occ, p, *, seed=7, device=None, tol=2e-2):
+def build_mask(video, occ, p, *, seed=7, device=None, motion_bounds=True):
     if device is None:
         device = video.device
 
@@ -485,7 +485,8 @@ def build_mask_within_bounds(video, occ, p, *, seed=7, device=None, tol=2e-2):
         video_b = video
 
     B, T, C, H, W = video_b.shape
-    bounds = compute_motion_bounds(video_b)
+    bounds = compute_motion_bounds(video_b) if motion_bounds else torch.tensor([[0, H - 1, 0, W - 1]]).expand(B,
+                                                                                                              4)  # (B, 4)
 
     mask_full = torch.zeros((B, H, W), device=device, dtype=torch.float32)
 
@@ -551,14 +552,14 @@ def build_mask_within_bounds(video, occ, p, *, seed=7, device=None, tol=2e-2):
     return mask_full
 
 
-def apply_mask_to_video(video, occ, p, *, seed=7, device=None):
+def apply_mask_to_video(video, occ, p, *, seed=7, device=None, motion_bounds=True):
     if device is None:
         device = video.device
 
     if float(p) < 0.02:
         return video, torch.zeros_like(video)
 
-    mask2d = build_mask_within_bounds(video, occ, p, seed=seed, device=device, tol=2e-2)
+    mask2d = build_mask(video, occ, p, seed=seed, device=device, motion_bounds=motion_bounds)
     return apply_structured_occlusion_static(video, mask2d)
 
 
