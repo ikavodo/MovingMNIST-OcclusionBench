@@ -19,7 +19,7 @@ class TrainConfig:
     num_workers: int = 2
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     log_dir: Path = LOG_DIR
-    ckpt_path: Path = CKPT_DIR / "best_smallcnn.pt"
+    ckpt_dir: Path = CKPT_DIR
 
 
 @dataclass

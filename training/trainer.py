@@ -30,7 +30,7 @@ def evaluate_classifier(model, loader, device: str):
     }
 
 
-def train_with_early_stopping(model, train_loader, val_loader, cfg: TrainConfig):
+def train_with_early_stopping(model, train_loader, val_loader, cfg: TrainConfig, ckpt_path):
     device = cfg.device
     model.to(device)
     opt = AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
@@ -43,7 +43,7 @@ def train_with_early_stopping(model, train_loader, val_loader, cfg: TrainConfig)
     best_state = None
     bad_epochs = 0
     history = []
-    Path(cfg.ckpt_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(cfg.ckpt_dir).mkdir(parents=True, exist_ok=True)
 
     for epoch in range(1, cfg.max_epochs + 1):
         model.train()
@@ -81,7 +81,7 @@ def train_with_early_stopping(model, train_loader, val_loader, cfg: TrainConfig)
         if improved:
             best_val_loss = val_metrics["loss"]
             best_state = copy.deepcopy(model.state_dict())
-            torch.save({"model_state": best_state, "history": history, "config": asdict(cfg)}, cfg.ckpt_path)
+            torch.save({"model_state": best_state, "history": history, "config": asdict(cfg)}, ckpt_path)
             bad_epochs = 0
         else:
             bad_epochs += 1

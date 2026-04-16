@@ -16,6 +16,7 @@ def main(dataset=DatasetType.MNIST):
 
     train_cfg = TrainConfig()
     print(f"Dataset type: {dataset.value}")
+    ckpt_path = train_cfg.ckpt_dir / f"{dataset.value}.pt"
 
     train_loader, val_loader, test_moving = build_loaders(
         seed=42,
@@ -31,6 +32,7 @@ def main(dataset=DatasetType.MNIST):
         train_loader,
         val_loader,
         train_cfg,
+        ckpt_path
     )
     history.to_csv(OUT_DIR / "train_history.csv", index=False)
 
