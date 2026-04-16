@@ -95,7 +95,7 @@ def evaluate_occlusion_sweep(
         videos = videos.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
 
-        videos_k, frame_indices = take_frames_batched(videos, k)
+        videos_k, frame_indices = take_frames_batched(videos, k) # use frame_indices, metas for alignment
 
         for p in p_values:
             p_float = float(p)

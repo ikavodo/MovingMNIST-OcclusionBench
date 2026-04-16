@@ -99,24 +99,37 @@ def test_align_video(mnist_small):
         assert diff < 1e-5, f"Frame {t} misaligned (max diff {diff})"
 
 
-def test_align_inverse_consistency(mnist_small):
+def test_align_video_subsampled(mnist_small):
     train, _, _ = mnist_small
 
-    ds = MovingMNIST(train, T=10, canvas=64, seed=123)
-    video, _, shifts, _ = ds[1]
+    ds = MovingMNIST(train, T=10, canvas=64, seed=42)
+    video, label, shifts, _ = ds[0]  # video: [T, C, H, W], shifts: [T-1, 2]
 
-    aligned = MovingMNIST.align_video(video, shifts)
+    # --- sample frames ---
+    k = 4
+    video_batched = video.unsqueeze(0)  # [1, T, C, H, W]
+    videos_k, frame_indices = take_frames_batched(video_batched, k)
 
-    # Now reapply forward shifts and compare to original
-    recon = [aligned[0].clone()]
-    frame = aligned[0].clone()
+    videos_k = videos_k[0]  # [k, C, H, W]
+    frame_indices = frame_indices[0]  # [k]
 
-    for t in range(shifts.shape[0]):
-        dy, dx = shifts[t]
-        frame = torch.roll(frame, shifts=(dy.item(), dx.item()), dims=(1, 2))
-        frame = MovingMNIST._zero_wrap(frame, dy.item(), dx.item())
-        recon.append(frame.clone())
+    # --- construct shifts for sampled video ---
+    # cumulative shifts over full sequence
+    cum = torch.zeros(video.shape[0], 2, dtype=shifts.dtype)
+    cum[1:] = torch.cumsum(shifts, dim=0)
 
-    recon = torch.stack(recon)
+    # pick cumulative shifts at sampled indices
+    cum_sampled = cum[frame_indices]  # [k, 2]
 
-    assert torch.allclose(recon, video, atol=1e-5)
+    # convert back to relative shifts between sampled frames
+    sampled_shifts = cum_sampled[1:] - cum_sampled[:-1]  # [k-1, 2]
+
+    # --- align sampled video ---
+    aligned = MovingMNIST.align_video(videos_k, sampled_shifts)
+
+    ref = aligned[0]
+
+    # --- same invariant: all frames align to first ---
+    for t in range(aligned.shape[0]):
+        diff = (aligned[t] - ref).abs().max()
+        assert diff < 1e-5, f"Subsampled frame {t} misaligned (max diff {diff})"

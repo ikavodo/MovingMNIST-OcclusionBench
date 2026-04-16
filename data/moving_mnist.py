@@ -126,7 +126,7 @@ class MovingMNIST(Dataset):
         return torch.stack(video, dim=0), int(label), torch.tensor(shifts, dtype=torch.long), meta
 
 
-# wrapper which extracts k frames
+# wrapper which extracts a frame
 class MovingMNISTFrames(Dataset):
     def __init__(self, moving_ds: Dataset, frame_seed: int = 0):
         self.ds = moving_ds
