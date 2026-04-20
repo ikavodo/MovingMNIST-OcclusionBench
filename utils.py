@@ -33,6 +33,20 @@ def take_frames(video, k=5):
     return video[idx], idx
 
 
+def integrate_frames(video: torch.Tensor, shifts: torch.Tensor) -> torch.Tensor:
+    """Align all frames to frame 0 and return their pixel-wise mean.
+
+    Args:
+        video:  ``[T, 1, H, W]`` float tensor.
+        shifts: ``[T-1, 2]`` long tensor — (dy, dx) per consecutive frame pair.
+
+    Returns:
+        ``[1, H, W]`` mean over aligned frames.
+    """
+    from data.moving_mnist import MovingMNIST
+    return MovingMNIST.align_video(video, shifts).mean(dim=0)
+
+
 # ----------------------------------------------------------------------
 # Plotting utilities
 # ----------------------------------------------------------------------

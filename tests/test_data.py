@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from data.mnist_base import build_mnist_splits
 from data.moving_mnist import MovingMNIST, MovingMNISTFrames
-from utils import get_project_root, take_frames
+from utils import get_project_root, take_frames, integrate_frames
 
 
 @pytest.fixture(scope="module")
@@ -98,6 +98,10 @@ def test_align_video(mnist_small):
         diff = (aligned[t] - ref).abs().max()
         assert diff < 1e-5, f"Frame {t} misaligned (max diff {diff})"
 
+    integrated = integrate_frames(video, shifts)
+    diff = (integrated - ref).abs().max()
+    assert diff < 1e-5, f"integrate_frames mismatch (max diff {diff:.2e})"
+
 
 def test_align_video_subsampled(mnist_small):
     train, _, _ = mnist_small
@@ -133,3 +137,49 @@ def test_align_video_subsampled(mnist_small):
     for t in range(aligned.shape[0]):
         diff = (aligned[t] - ref).abs().max()
         assert diff < 1e-5, f"Subsampled frame {t} misaligned (max diff {diff})"
+
+    # test integration
+    integrated = integrate_frames(videos_k, sampled_shifts)
+    diff = (integrated - ref).abs().max()
+    assert diff < 1e-5, f"integrate_frames (subsampled) mismatch (max diff {diff:.2e})"
+
+
+def test_integrate_occluded_k_batched(mnist_small):
+    """Temporal integration of aligned occluded frames beats a single occluded frame."""
+    from occluders import apply_mask_to_video, Occ
+
+    train, _, _ = mnist_small
+    T, k, p = 20, 8, 0.4
+
+    ds = MovingMNIST(train, T=T, canvas=64, seed=7)
+    B = 4
+    videos     = torch.stack([ds[i][0] for i in range(B)])   # [B, T, 1, 64, 64]
+    all_shifts = torch.stack([ds[i][2] for i in range(B)])   # [B, T-1, 2]
+
+    # k-subsample frames
+    videos_k, frame_indices = take_frames_batched(videos, k)  # [B, k, 1, 64, 64]
+
+    # Apply static Bernoulli occlusion to the k-batch
+    occluded_k, _ = apply_mask_to_video(videos_k, Occ.BERNOULLI, p, seed=42)
+
+    ref     = videos[:, 0]       # [B, 1, 64, 64]  clean frame 0
+    occ_ref = occluded_k[:, 0]   # [B, 1, 64, 64]  occluded frame 0
+
+    # Align + integrate each batch element's occluded k-frames
+    integrated = []
+    for b in range(B):
+        cum = torch.zeros(T, 2, dtype=all_shifts.dtype)
+        cum[1:] = torch.cumsum(all_shifts[b], dim=0)
+        fi = frame_indices[b]                               # [k]
+        sampled_shifts_b = cum[fi[1:]] - cum[fi[:-1]]      # [k-1, 2]
+        integrated.append(integrate_frames(occluded_k[b], sampled_shifts_b))
+
+    integrated = torch.stack(integrated)                    # [B, 1, 64, 64]
+
+    mse_integrated = (integrated - ref).pow(2).mean().item()
+    mse_occ_ref    = (occ_ref    - ref).pow(2).mean().item()
+
+    assert mse_integrated < mse_occ_ref, (
+        f"Integration MSE {mse_integrated:.4f} should be < "
+        f"single-occluded-frame MSE {mse_occ_ref:.4f}"
+    )
