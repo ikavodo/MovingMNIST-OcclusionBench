@@ -9,7 +9,7 @@ from data.mnist_base import DatasetType
 from models.small_cnn import SmallCNN
 from training.config import EvalConfig
 from training.evaluation import load_best_model, evaluate_occlusion_sweep
-from utils import seed_everything, get_project_root, plot_occlusion_results
+from utils import seed_everything, get_project_root, plot_results
 
 from data.loaders import (
     OUT_DIR,
@@ -44,7 +44,7 @@ def run_occlusion_eval(
         progress_bar = progress_bar
     )
 
-    plot_occlusion_results(
+    plot_results(
         df,
         out_dir=out_dir / "plots",
     )

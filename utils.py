@@ -282,7 +282,7 @@ def plot_reliability_diagrams(df, out_dir, occ_col="occ"):
     plt.close(fig)
 
 
-def plot_occlusion_results(
+def plot_results(
         df,
         out_dir="outputs/plots",
         coverage_col="coverage_target",
