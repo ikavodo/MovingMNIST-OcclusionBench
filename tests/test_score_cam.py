@@ -151,6 +151,7 @@ def test_score_cam_fashion_real_sample():
         saliency, cls = cam(x)
 
     _assert_valid_saliency(saliency)
+    # fails at the moment because need to retrain fashion model.
     assert cls == label, (
         f"Fashion: Score-CAM target class {cls} does not match true label {label}"
     )

@@ -33,18 +33,39 @@ def take_frames(video, k=5):
     return video[idx], idx
 
 
-def integrate_frames(video: torch.Tensor, shifts: torch.Tensor) -> torch.Tensor:
-    """Align all frames to frame 0 and return their pixel-wise mean.
+def integrate_frames(
+    video: torch.Tensor,
+    shifts: torch.Tensor,
+    weights: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """Align all frames to frame 0 and return their (optionally weighted) pixel-wise mean.
 
     Args:
-        video:  ``[T, 1, H, W]`` float tensor.
-        shifts: ``[T-1, 2]`` long tensor — (dy, dx) per consecutive frame pair.
+        video:   ``[T, 1, H, W]`` float tensor.
+        shifts:  ``[T-1, 2]`` long tensor — (dy, dx) per consecutive frame pair.
+        weights: Optional ``[T, H, W]`` or ``[T, 1, H, W]`` non-negative float
+                 tensor of per-frame spatial weights in the same unaligned
+                 coordinate system as ``video``. Weights are aligned alongside
+                 the frames before the weighted mean is computed. If ``None``,
+                 returns a plain mean.
 
     Returns:
-        ``[1, H, W]`` mean over aligned frames.
+        ``[1, H, W]`` (weighted) mean over aligned frames.
     """
     from data.moving_mnist import MovingMNIST
-    return MovingMNIST.align_video(video, shifts).mean(dim=0)
+
+    if weights is None:
+        aligned = MovingMNIST.align_video(video, shifts)  # [T, 1, H, W]
+        return aligned.mean(dim=0)
+
+    if weights.dim() == 3:                             # [T, H, W] → [T, 1, H, W]
+        weights = weights.unsqueeze(1)
+
+    combined  = torch.cat([video * weights, weights], dim=1)        # [T, 2, H, W]
+    aligned_c = MovingMNIST.align_video(combined.float(), shifts)   # [T, 2, H, W]
+    numerator   = aligned_c[:, 0:1].sum(dim=0)                     # [1, H, W]
+    denominator = aligned_c[:, 1:2].sum(dim=0).clamp(min=1e-8)
+    return numerator / denominator
 
 
 # ----------------------------------------------------------------------

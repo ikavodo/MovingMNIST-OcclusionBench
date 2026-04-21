@@ -183,3 +183,58 @@ def test_integrate_occluded_k_batched(mnist_small):
         f"Integration MSE {mse_integrated:.4f} should be < "
         f"single-occluded-frame MSE {mse_occ_ref:.4f}"
     )
+
+def test_saliency_weighted_integration(mnist_small):
+    """Score-CAM heatmaps as spatial weights improve integration over a single occluded frame."""
+    from occluders import apply_mask_to_video, Occ
+    from models.score_cam import ScoreCAM
+    from models.small_cnn import SmallCNN
+    from training.evaluation import load_best_model
+
+    CKPT = get_project_root() / "data" / "checkpoints" / "mnist.pt"
+    if not CKPT.exists():
+        pytest.skip("MNIST checkpoint not found")
+
+    train, _, _ = mnist_small
+    T, k, p = 20, 8, 0.4
+
+    ds = MovingMNIST(train, T=T, canvas=64, seed=7)
+    B = 4
+    videos     = torch.stack([ds[i][0] for i in range(B)])   # [B, T, 1, 64, 64]
+    all_shifts = torch.stack([ds[i][2] for i in range(B)])   # [B, T-1, 2]
+
+    videos_k, frame_indices = take_frames_batched(videos, k)
+    occluded_k, _ = apply_mask_to_video(videos_k, Occ.BERNOULLI, p, seed=42)
+
+    ref     = videos[:, 0]       # [B, 1, 64, 64]  clean frame 0
+    occ_ref = occluded_k[:, 0]   # [B, 1, 64, 64]  occluded frame 0
+
+    model = load_best_model(SmallCNN, CKPT)
+
+    weighted_integrated = []
+    with ScoreCAM(model) as cam:
+        for b in range(B):
+            cum = torch.zeros(T, 2, dtype=all_shifts.dtype)
+            cum[1:] = torch.cumsum(all_shifts[b], dim=0)
+            fi = frame_indices[b]
+            sampled_shifts_b = cum[fi[1:]] - cum[fi[:-1]]      # [k-1, 2]
+
+            # Score-CAM heatmap per occluded frame → [k, H, W]
+            heatmaps = torch.stack([
+                cam(occluded_k[b, t].unsqueeze(0))[0]          # [H, W]
+                for t in range(k)
+            ])
+
+            weighted_integrated.append(
+                integrate_frames(occluded_k[b], sampled_shifts_b, weights=heatmaps)
+            )
+
+    weighted_integrated = torch.stack(weighted_integrated)      # [B, 1, 64, 64]
+
+    mse_weighted = (weighted_integrated - ref).pow(2).mean().item()
+    mse_occ_ref  = (occ_ref - ref).pow(2).mean().item()
+
+    assert mse_weighted < mse_occ_ref, (
+        f"Saliency-weighted MSE {mse_weighted:.4f} should be < "
+        f"occluded-frame MSE {mse_occ_ref:.4f}"
+    )
